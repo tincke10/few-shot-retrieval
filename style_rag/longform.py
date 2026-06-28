@@ -196,15 +196,20 @@ def expand_section(profile: Profile, topic: str, thesis: str, section: dict,
 
 HILO CONDUCTOR de todo el texto (no lo pierdas de vista): {thesis}
 {metodo_block}{examples_block}{covered_block}{transition_block}
-SECCIÓN A ESCRIBIR: {section['title']}
+SECCIÓN: {section['title']}
 ÁNGULO (lo que ESTA sección aporta y ninguna otra): {section['angle']}
 PUNTOS A DESARROLLAR: {points}
-LARGO OBJETIVO: ~{section['words']} palabras.
+LARGO OBJETIVO: ~{section['words']} palabras. Desarrollá en profundidad hasta \
+acercarte a ese largo.
 
-Escribí SOLO el contenido de esta sección (sin meta-comentarios). Empezá con el \
-título como encabezado markdown (## {section['title']}). Mantené el estilo y el \
-método de los ejemplos. No repitas lo que ya se dijo antes. Conectá con la \
-sección anterior de forma natural."""
+Reglas:
+- Imitá el MÉTODO de los ejemplos (cómo encuadra el problema, el ritmo, cómo \
+construye hacia el "aha"), NO sus analogías concretas. Inventá analogías PROPIAS \
+del tema; no reutilices las analogías ni los términos técnicos de los ejemplos \
+(por ejemplo: recursión, escaleras, peldaños, pizzas, "caso base").
+- No repitas lo que ya se dijo antes. Conectá con la sección anterior de forma natural.
+- Escribí SOLO la prosa de la sección: sin título, sin encabezados markdown, sin \
+meta-comentarios ni etiquetas."""
     return _llm(prompt, model)
 
 
@@ -234,11 +239,12 @@ def coherence_pass(section_text: str, prev_tail: str, covered: str,
         if covered.strip() else ""
 
     prompt = f"""Editá la siguiente sección para mejorar su coherencia dentro del \
-texto. Tareas, SIN cambiar el estilo ni agregar temas nuevos:
+texto. Tareas, SIN cambiar el estilo, SIN acortarla y SIN agregar temas nuevos:
 1. Que el primer párrafo conecte de forma fluida con lo anterior.
 2. Eliminá frases o ideas que repitan algo ya tratado antes.
 3. Mejorá las transiciones internas entre párrafos.
-Devolvé la sección editada COMPLETA (con su encabezado), nada más.
+Devolvé SOLO la prosa editada: sin título, sin encabezados markdown, sin etiquetas \
+del tipo "SECCIÓN EDITADA", nada más.
 {transition}{covered_block}
 SECCIÓN A EDITAR:
 {section_text}
@@ -248,6 +254,56 @@ SECCIÓN A EDITAR:
 
 def _tail(text: str, n_chars: int = 300) -> str:
     return text.strip()[-n_chars:]
+
+
+# --------------------------------------------------------------------------
+# Output cleanup + length control
+# --------------------------------------------------------------------------
+# Small models add meta-labels ("SECCIÓN EDITADA"), echo the thesis as a heading
+# and use inconsistent heading levels. We strip all that and impose ONE canonical
+# "## <title>" per section, so the model's formatting whims never reach the output.
+_META_LINE_RE = re.compile(
+    r"^\s*\**\s*("
+    r"secci[oó]n\s+(?:editada|a\s+editar|\d+)|"
+    r"texto\s+editado|resultado|explicaci[oó]n|nota|t[ií]tulo|tesis"
+    r")\b.*$",
+    re.IGNORECASE,
+)
+_H1_H2_RE = re.compile(r"^#{1,2}(?!#)\s")  # h1/h2 only; keeps ### sub-headings
+
+SHORT_SECTION_RATIO = 0.7   # below this fraction of the budget -> try to extend
+MAX_EXTEND_TRIES = 1        # bounded: long docs already make many LLM calls
+
+
+def _word_count(text: str) -> int:
+    return len(text.split())
+
+
+def _postprocess_section(text: str, title: str) -> str:
+    """Strip model meta-labels and stray headings, then impose a canonical title."""
+    kept = []
+    for line in text.strip().splitlines():
+        s = line.strip()
+        if _META_LINE_RE.match(s):
+            continue
+        if _H1_H2_RE.match(s):
+            continue
+        kept.append(line)
+    body = "\n".join(kept).strip()
+    return f"## {title}\n\n{body}".strip()
+
+
+def _extend_section(text: str, section: dict, topic: str, model: str) -> str:
+    prompt = f"""La siguiente sección sobre "{section['title']}" (tema general: \
+{topic}) quedó demasiado corta. Reescribila MÁS LARGA, hasta acercarte a \
+~{section['words']} palabras, agregando profundidad, ejemplos y matices NUEVOS \
+(nada de relleno ni repetir lo que ya dice). Mantené el mismo estilo y tono. \
+Devolvé SOLO la prosa, sin título ni encabezados ni etiquetas.
+
+SECCIÓN ACTUAL:
+{text}
+"""
+    return _llm(prompt, model)
 
 
 # --------------------------------------------------------------------------
@@ -262,15 +318,26 @@ def compose(profile: Profile, topic: str, outline: dict,
     parts = [f"# {topic}\n"]
 
     for i, section in enumerate(sections, 1):
-        _log(f"[{i}/{len(sections)}] Escribiendo: {section['title']} (~{section['words']} palabras)")
+        target = section["words"]
+        _log(f"[{i}/{len(sections)}] Escribiendo: {section['title']} (~{target} palabras)")
         text = expand_section(profile, topic, thesis, section, covered, prev_tail,
                               model=model, k=k)
 
         if edit:
-            _log(f"        editando coherencia...")
+            _log("        editando coherencia...")
             text = coherence_pass(text, prev_tail, covered, model=model)
 
-        parts.append(text.strip())
+        text = _postprocess_section(text, section["title"])
+
+        # Length control: re-expand sections that fell well short of their budget.
+        tries = 0
+        while _word_count(text) < SHORT_SECTION_RATIO * target and tries < MAX_EXTEND_TRIES:
+            _log(f"        corta ({_word_count(text)}/{target}), extendiendo...")
+            text = _postprocess_section(
+                _extend_section(text, section, topic, model), section["title"])
+            tries += 1
+
+        parts.append(text)
         covered = update_summary(covered, section["title"], text, model=model)
         prev_tail = _tail(text)
 

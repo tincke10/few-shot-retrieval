@@ -38,7 +38,9 @@ python rag_style.py explain  demo "how to explain derivatives"
 python rag_style.py compose demo "report on world peace" --words 10000 --auto -o report.md
 ```
 
-A ready-to-use `demo-divulgador` profile ships with the repo — just run `index` on it.
+Two ready-to-use profiles ship with the repo — `demo-divulgador` (didactic
+explainer) and `ensayista-social` (social-essay voice). Run `index` on either
+before use (see [Notes](#notes) on why the index isn't committed).
 
 ## How it works
 
@@ -85,6 +87,9 @@ Use `outline` first if you want to review/edit the plan before expanding.
 - **Language** — bundled prompts and demo docs are in Spanish, so output is in
   Spanish. Code, comments and this README are in English. Adapt the prompt strings
   in `style_rag/generation.py` / `longform.py` to change the output language.
+- **Indexes aren't committed** — `profiles/*/index.npz` is git-ignored (it's a
+  generated artifact, rebuilt from the corpus). A freshly cloned profile has *no*
+  index, so run `index <profile>` once before `retrieve`/`explain`/`compose`.
 - **OCR ≠ chunking** — OCR turns images into text; it does *not* replace chunking,
   which is what makes retrieval find the relevant fragment.
 - **Quality bottleneck is the model** — the scaffolding holds structure, but a

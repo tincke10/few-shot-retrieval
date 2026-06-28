@@ -1,0 +1,24 @@
+# --- Base (siempre necesario) -------------------------------------------
+# Corre en CPU, gratis. Suficiente para ingerir .txt / .md y generar.
+sentence-transformers>=2.2.0
+numpy>=1.24.0
+requests>=2.28.0
+
+# --- Ingesta multi-formato (opcional, importado de forma perezosa) -------
+# Solo lo necesitás si vas a ingerir PDFs o imágenes. Si solo usás texto
+# plano, podés saltearte todo lo de abajo.
+
+# PDF (texto seleccionable) + render de páginas escaneadas para OCR:
+pymupdf>=1.24.0
+
+# OCR liviano en CPU (backend 'tesseract', el default).
+# Requiere ADEMÁS el binario del sistema:  brew install tesseract tesseract-lang
+pytesseract>=0.3.10
+pillow>=10.0.0
+
+# --- OCR pesado (opcional, backend 'unlimited') -------------------------
+# Baidu Unlimited-OCR: GPU NVIDIA + CUDA 12.9-13. NO se instala por defecto
+# porque rompe la premisa "corre en tu laptop". Seguí el README del repo:
+#   https://github.com/baidu/Unlimited-OCR
+# torch>=2.10.0
+# transformers>=4.57.0

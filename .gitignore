@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Generated indexes (rebuilt with `index`)
+profiles/*/index.npz
+
+# Local scratch / test artifacts
+scratchpad_*
+*.log

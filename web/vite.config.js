@@ -1,13 +1,19 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// The backend (FastAPI) runs on :8000. We proxy /api there so the frontend can
-// use relative URLs and we sidestep CORS entirely during development.
+// The backend (FastAPI) runs on :8000. We proxy its routes there so the frontend
+// uses relative URLs and sidesteps CORS in development. The Scrivo contract lives
+// at the root (/profiles, /models, /health, /generate); /api/* is the older MVP.
+const backend = 'http://localhost:8000'
 export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      '/api': 'http://localhost:8000',
+      '/profiles': backend,
+      '/models': backend,
+      '/health': backend,
+      '/generate': backend,
+      '/api': backend,
     },
   },
 })

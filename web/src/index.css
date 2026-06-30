@@ -1,58 +1,40 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --surface: #faf9f7;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --danger: #c0392b;
-  --danger-bg: rgba(192, 57, 43, 0.08);
+  --bg: #0a0a0a;
+  --text: #f5f5f5;
+}
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
-
-  font: 16px/1.5 var(--sans);
-  color-scheme: light dark;
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--bg); }
+body {
+  font-family: 'Space Grotesk', sans-serif;
   color: var(--text);
-  background: var(--bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --surface: #1c1d24;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --danger: #ff8a80;
-    --danger-bg: rgba(255, 138, 128, 0.1);
-  }
+textarea:focus, input:focus, select:focus { outline: none; }
+::placeholder { color: rgba(255,255,255,0.25); }
+textarea, select, input, button { font-family: 'Space Grotesk', sans-serif; }
+select option { background: #141414; color: #f5f5f5; }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+
+.mono { font-family: 'JetBrains Mono', monospace; }
+.grad-text {
+  background: linear-gradient(120deg,#38bdf8,#a855f7);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent; color: transparent;
 }
 
-* {
-  box-sizing: border-box;
-}
+/* Hover effects (inline styles can't express :hover) */
+.card-hover:hover { border-color: rgba(129,140,248,0.55) !important; }
+.ghost-hover:hover { border-color: rgba(255,255,255,0.25) !important; }
+.danger-hover:hover { border-color: rgba(248,113,113,0.5) !important; color: #f87171 !important; }
 
-body {
-  margin: 0;
-}
-
-h1,
-h2 {
-  font-weight: 600;
-  color: var(--text-h);
-  margin: 0;
-}
-
-p {
-  margin: 0;
-}
+@keyframes scrivo-spin { to { transform: rotate(360deg); } }
+@keyframes scrivo-blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+@keyframes scrivo-pulse { 0%,100% { opacity: 0.45; } 50% { opacity: 1; } }
+@keyframes scrivo-fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes scrivo-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }

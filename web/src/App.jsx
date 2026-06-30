@@ -1,125 +1,69 @@
-import { useEffect, useState } from 'react'
-import { getProfiles, explainStream } from './api'
-import './App.css'
+import Header from './components/Header.jsx';
+import ProfilesSection from './components/ProfilesSection.jsx';
+import IngestPanel from './components/IngestPanel.jsx';
+import BriefPanel from './components/BriefPanel.jsx';
+import ResultPanel from './components/ResultPanel.jsx';
+import RetrievedPanel from './components/RetrievedPanel.jsx';
+import { useScrivo } from './useScrivo.js';
 
 export default function App() {
-  const [profiles, setProfiles] = useState([])
-  const [profile, setProfile] = useState('')
-  const [query, setQuery] = useState('')
-  const [examples, setExamples] = useState([])
-  const [answer, setAnswer] = useState('')
-  const [status, setStatus] = useState('idle') // idle | loading | streaming | error | done
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    getProfiles()
-      .then((ps) => {
-        setProfiles(ps)
-        if (ps.length) setProfile(ps[0].name)
-      })
-      .catch((e) => setError(e.message))
-  }, [])
-
-  const busy = status === 'loading' || status === 'streaming'
-
-  async function onSubmit(e) {
-    e.preventDefault()
-    if (!profile || !query.trim() || busy) return
-
-    setExamples([])
-    setAnswer('')
-    setError('')
-    setStatus('loading')
-
-    await explainStream(
-      { profile, query: query.trim() },
-      {
-        onExamples: (ex) => {
-          setExamples(ex)
-          setStatus('streaming')
-        },
-        onToken: (t) => setAnswer((prev) => prev + t),
-        onError: (msg) => {
-          setError(msg)
-          setStatus('error')
-        },
-        onDone: () => setStatus('done'),
-      },
-    )
-  }
-
-  const selected = profiles.find((p) => p.name === profile)
+  const s = useScrivo();
 
   return (
-    <div className="app">
-      <header>
-        <h1>Style RAG</h1>
-        <p className="tagline">
-          Explicá un tema nuevo en la <strong>voz y el método</strong> de un autor.
-        </p>
-      </header>
+    <div style={{ minHeight: '100vh', background: '#0a0a0a', color: '#f5f5f5', paddingBottom: 90 }}>
+      <div style={{ maxWidth: 1240, margin: '0 auto', padding: '0 28px' }}>
+        <Header model={s.model} health={s.health} />
 
-      <form onSubmit={onSubmit} className="controls">
-        <label className="field">
-          <span>Perfil</span>
-          <select value={profile} onChange={(e) => setProfile(e.target.value)} disabled={busy}>
-            {profiles.map((p) => (
-              <option key={p.name} value={p.name} disabled={!p.indexed}>
-                {p.name} {p.indexed ? '' : '(sin índice)'}
-              </option>
-            ))}
-          </select>
-        </label>
+        {/* Hero */}
+        <section style={{ position: 'relative', padding: '62px 0 30px' }}>
+          <div style={{ position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)', width: 680, maxWidth: '100%', height: 300, background: 'radial-gradient(ellipse at center,rgba(99,102,241,0.20),rgba(168,85,247,0.06) 45%,transparent 72%)', filter: 'blur(8px)', pointerEvents: 'none', zIndex: 0 }} />
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            <div className="mono" style={{ fontSize: 12, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'rgba(255,255,255,0.42)', marginBottom: 22 }}>RAG · few-shot retrieval · ollama local</div>
+            <h1 style={{ margin: 0, fontSize: 'clamp(34px,5.4vw,60px)', fontWeight: 700, letterSpacing: '-0.035em', lineHeight: 1.02, maxWidth: 760 }}>
+              Escribí en cualquier voz.<br />
+              <span style={{ background: 'linear-gradient(120deg,#38bdf8 0%,#6366f1 50%,#a855f7 100%)', WebkitBackgroundClip: 'text', backgroundClip: 'text', WebkitTextFillColor: 'transparent', color: 'transparent' }}>Sin alucinar.</span>
+            </h1>
+            <p style={{ margin: '24px 0 0', fontSize: 17, lineHeight: 1.62, color: 'rgba(255,255,255,0.55)', maxWidth: 600 }}>
+              Elegí un perfil de escritura. El motor recupera los ejemplos más parecidos de su corpus y guía al modelo local de Ollama para que el texto suene exactamente como vos.
+            </p>
+          </div>
+        </section>
 
-        <label className="field grow">
-          <span>Tema a explicar</span>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="ej: cómo funciona la fotosíntesis"
-            disabled={busy}
+        <ProfilesSection
+          profiles={s.profiles}
+          selectedProfileId={s.selectedProfileId}
+          onSelect={s.setSelectedProfileId}
+          onNewProfile={() => s.setIngestOpen(!s.ingestOpen)}
+        />
+        {s.ingestOpen && (
+          <IngestPanel
+            ingestName={s.ingestName} setIngestName={s.setIngestName}
+            ingestDesc={s.ingestDesc} setIngestDesc={s.setIngestDesc}
+            ingestFiles={s.ingestFiles} ingesting={s.ingesting}
+            addFiles={s.addFiles} removeFile={s.removeFile}
+            cancelIngest={s.cancelIngest} createProfile={s.createProfile}
           />
-        </label>
-
-        <button type="submit" disabled={busy || !query.trim()}>
-          {busy ? 'Generando…' : 'Explicar'}
-        </button>
-      </form>
-
-      {selected && <p className="profile-desc">{selected.description}</p>}
-
-      {error && <div className="error">{error}</div>}
-
-      <div className="results">
-        {examples.length > 0 && (
-          <aside className="examples">
-            <h2>Fragmentos recuperados</h2>
-            {examples.map((ex) => (
-              <div key={ex.rank} className="fragment">
-                <div className="fragment-meta">
-                  <span className="source">{ex.source}</span>
-                  <span className="score">
-                    {Number.isNaN(ex.score) ? 'azar' : `coseno ${ex.score.toFixed(3)}`}
-                  </span>
-                </div>
-                <p>{ex.text}</p>
-              </div>
-            ))}
-          </aside>
         )}
 
-        {(answer || status === 'streaming' || status === 'loading') && (
-          <section className="answer">
-            <h2>
-              Explicación
-              {status === 'streaming' && <span className="cursor">▌</span>}
-            </h2>
-            {status === 'loading' && !answer && <p className="muted">Recuperando ejemplos…</p>}
-            <div className="answer-text">{answer}</div>
-          </section>
-        )}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 24, alignItems: 'flex-start', marginTop: 50 }}>
+          <BriefPanel
+            prompt={s.prompt} setPrompt={s.setPrompt}
+            onGenerate={s.generate} onStop={s.stop}
+            loading={s.loading} canGenerate={s.canGenerate}
+            models={s.models} model={s.model} setModel={s.setModel}
+            temperature={s.temperature} setTemperature={s.setTemperature}
+            retrievalTopK={s.retrievalTopK} setRetrievalTopK={s.setRetrievalTopK}
+            maxTokens={s.maxTokens} setMaxTokens={s.setMaxTokens}
+          />
+          <div style={{ flex: '1 1 440px', minWidth: 0, display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <ResultPanel
+              output={s.output} loading={s.loading} streaming={s.streaming}
+              error={s.error} selectedProfile={s.selectedProfile} onRegenerate={s.generate}
+            />
+            <RetrievedPanel retrieved={s.retrieved} fallbackCount={s.retrievalTopK} />
+          </div>
+        </div>
       </div>
     </div>
-  )
+  );
 }

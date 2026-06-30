@@ -1,64 +1,76 @@
-// Thin client over the FastAPI backend. URLs are relative because Vite proxies
-// /api to the backend (see vite.config.js).
+// Client for the Scrivo backend contract. URLs are relative; Vite proxies them
+// to the FastAPI backend (see vite.config.js).
 
 export async function getProfiles() {
-  const res = await fetch('/api/profiles')
-  if (!res.ok) throw new Error('No pude cargar los perfiles')
-  return res.json()
+  const r = await fetch('/profiles');
+  if (!r.ok) throw new Error('profiles ' + r.status);
+  return r.json(); // [{ id, name, description, examplesCount }]
 }
 
-export async function retrieve({ profile, query, random = false }) {
-  const res = await fetch('/api/retrieve', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ profile, query, random }),
-  })
-  if (!res.ok) {
-    const { detail } = await res.json().catch(() => ({}))
-    throw new Error(detail || 'Falló el retrieve')
-  }
-  return (await res.json()).results
+export async function getModels() {
+  const r = await fetch('/models');
+  if (!r.ok) throw new Error('models ' + r.status);
+  const data = await r.json();
+  return data.map((m) => m.name || m);
 }
 
-// Streams the explanation. The backend sends Server-Sent Events:
-//   { type: 'examples', examples: [...] }   -> the retrieved fragments
-//   { type: 'token', token: '...' }         -> one piece of the answer
-//   { type: 'done' }                        -> finished
-//   { type: 'error', message: '...' }       -> something failed mid-stream
-// `handlers` receives onExamples, onToken, onError, onDone.
-export async function explainStream({ profile, query, random = false }, handlers) {
-  const res = await fetch('/api/explain', {
+export async function getHealth() {
+  const r = await fetch('/health');
+  return r.json(); // { ok, ollama }
+}
+
+// Streams generation. Calls handlers as SSE events arrive:
+//   onRetrieved(items) · onToken(text) · onError(message) · onDone()
+// Returns the Response so the caller can abort via an AbortController signal.
+export async function generate(body, handlers, signal) {
+  const r = await fetch('/generate', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ profile, query, random }),
-  })
-
-  if (!res.ok) {
-    const { detail } = await res.json().catch(() => ({}))
-    handlers.onError?.(detail || 'Falló el explain')
-    return
+    headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!r.ok) {
+    let detail = 'HTTP ' + r.status;
+    try { detail = (await r.json()).detail || detail; } catch (_) {}
+    throw new Error(detail);
   }
-
-  const reader = res.body.getReader()
-  const decoder = new TextDecoder()
-  let buffer = ''
-
+  const reader = r.body.getReader();
+  const dec = new TextDecoder();
+  let buf = '';
   while (true) {
-    const { value, done } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
-
-    // SSE frames are separated by a blank line.
-    const frames = buffer.split('\n\n')
-    buffer = frames.pop() // keep the trailing partial frame for the next chunk
-    for (const frame of frames) {
-      const line = frame.split('\n').find((l) => l.startsWith('data: '))
-      if (!line) continue
-      const event = JSON.parse(line.slice(6))
-      if (event.type === 'examples') handlers.onExamples?.(event.examples)
-      else if (event.type === 'token') handlers.onToken?.(event.token)
-      else if (event.type === 'error') handlers.onError?.(event.message)
-      else if (event.type === 'done') handlers.onDone?.()
+    const { value, done } = await reader.read();
+    if (done) break;
+    buf += dec.decode(value, { stream: true });
+    const parts = buf.split('\n\n');
+    buf = parts.pop();
+    for (const part of parts) {
+      const line = part.split('\n').find((l) => l.startsWith('data:'));
+      if (!line) continue;
+      const payload = line.slice(5).trim();
+      if (payload === '[DONE]') continue;
+      try {
+        const ev = JSON.parse(payload);
+        if (ev.retrieved) handlers.onRetrieved?.(ev.retrieved);
+        if (ev.token || ev.delta) handlers.onToken?.(ev.token || ev.delta);
+        if (ev.output) handlers.onToken?.(ev.output, true);
+        if (ev.error) handlers.onError?.(ev.error);
+      } catch (_) { handlers.onToken?.(payload); }
     }
   }
+  handlers.onDone?.();
+}
+
+// Creates a profile from files (multipart). Returns { id, name, examplesCount }.
+export async function createProfile({ name, description, files }) {
+  const fd = new FormData();
+  fd.append('name', name);
+  fd.append('description', description);
+  files.forEach((f) => fd.append('files', f.file, f.name));
+  const r = await fetch('/profiles', { method: 'POST', body: fd });
+  if (!r.ok) {
+    let detail = 'HTTP ' + r.status;
+    try { detail = (await r.json()).detail || detail; } catch (_) {}
+    throw new Error(detail);
+  }
+  return r.json();
 }

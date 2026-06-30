@@ -10,3 +10,10 @@ profiles/*/index.npz
 # Local scratch / test artifacts
 scratchpad_*
 *.log
+_*.png
+
+# OS / editor cruft
+.DS_Store
+
+# Node (web/ has its own, this covers stray installs)
+node_modules/

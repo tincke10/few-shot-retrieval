@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>scrivo · few-shot writing engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: #0a0a0a; }
+  body { font-family: 'Space Grotesk', sans-serif; color: #f5f5f5; -webkit-font-smoothing: antialiased; }
+  textarea:focus, input:focus, select:focus { outline: none; }
+  ::placeholder { color: rgba(255,255,255,0.25); }
+  textarea, select, input[type=range], input[type=text] { font-family: 'Space Grotesk', sans-serif; }
+  select option { background: #141414; color: #f5f5f5; }
+  ::-webkit-scrollbar { width: 9px; height: 9px; }
+  ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  button { font-family: 'Space Grotesk', sans-serif; }
+  .mono { font-family: 'JetBrains Mono', monospace; }
+  .grad-text { background: linear-gradient(120deg,#38bdf8,#a855f7); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; color: transparent; }
+  @keyframes scrivo-spin { to { transform: rotate(360deg); } }
+  @keyframes scrivo-blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+  @keyframes scrivo-pulse { 0%,100% { opacity: 0.45; } 50% { opacity: 1; } }
+  @keyframes scrivo-fade { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes scrivo-shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+  .card-hover:hover { border-color: rgba(129,140,248,0.55) !important; }
+  .ghost-hover:hover { border-color: rgba(255,255,255,0.25) !important; }
+</style>
+</head>
+<body>
+<div style="min-height:100vh;background:#0a0a0a;color:#f5f5f5;padding-bottom:90px;">
+  <div style="max-width:1240px;margin:0 auto;padding:0 28px;">
+
+    <!-- Header -->
+    <header style="display:flex;justify-content:space-between;align-items:center;padding:22px 0;border-bottom:1px solid rgba(255,255,255,0.06);flex-wrap:wrap;gap:14px;">
+      <div style="display:flex;align-items:center;gap:13px;">
+        <div style="width:27px;height:27px;border-radius:8px;background:linear-gradient(135deg,#38bdf8 0%,#6366f1 52%,#a855f7 100%);box-shadow:0 4px 18px rgba(99,102,241,0.4);"></div>
+        <span style="font-size:21px;font-weight:700;letter-spacing:-0.03em;">scrivo</span>
+        <span class="mono" style="font-size:11px;color:rgba(255,255,255,0.38);padding-top:3px;letter-spacing:0.02em;">few-shot writing engine</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span id="modelPill" class="mono" style="font-size:11px;color:rgba(255,255,255,0.5);padding:7px 11px;border-radius:999px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);">llama3.1</span>
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 13px;border-radius:999px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.02);">
+          <span id="healthDot" style="width:8px;height:8px;border-radius:50%;background:#9ca3af;box-shadow:0 0 9px #9ca3af;animation:scrivo-pulse 2.2s ease-in-out infinite;display:inline-block;"></span>
+          <span id="healthLabel" class="mono" style="font-size:11px;color:rgba(255,255,255,0.62);">verificando…</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Hero -->
+    <section style="position:relative;padding:62px 0 30px;">
+      <div style="position:absolute;top:-30px;left:50%;transform:translateX(-50%);width:680px;max-width:100%;height:300px;background:radial-gradient(ellipse at center,rgba(99,102,241,0.20),rgba(168,85,247,0.06) 45%,transparent 72%);filter:blur(8px);pointer-events:none;z-index:0;"></div>
+      <div style="position:relative;z-index:1;">
+        <div class="mono" style="font-size:12px;letter-spacing:0.22em;text-transform:uppercase;color:rgba(255,255,255,0.42);margin-bottom:22px;">RAG · few-shot retrieval · ollama local</div>
+        <h1 style="margin:0;font-size:clamp(34px,5.4vw,60px);font-weight:700;letter-spacing:-0.035em;line-height:1.02;max-width:760px;">Escribí en cualquier voz.<br><span class="grad-text" style="background:linear-gradient(120deg,#38bdf8 0%,#6366f1 50%,#a855f7 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;">Sin alucinar.</span></h1>
+        <p style="margin:24px 0 0;font-size:17px;line-height:1.62;color:rgba(255,255,255,0.55);max-width:600px;">Elegí un perfil de escritura. El motor recupera los ejemplos más parecidos de su corpus y guía al modelo local de Ollama para que el texto suene exactamente como vos.</p>
+      </div>
+    </section>
+
+    <!-- 01 · Perfil -->
+    <section style="padding-top:34px;">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:20px;">
+        <span class="mono grad-text" style="font-size:13px;font-weight:500;">01</span>
+        <span class="mono" style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.5);">Perfil de escritura</span>
+        <span style="flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,0.13),transparent);"></span>
+      </div>
+      <div id="profilesGrid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(228px,1fr));gap:14px;"></div>
+      <div id="ingestPanel"></div>
+    </section>
+
+    <!-- Two columns: brief + result -->
+    <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start;margin-top:50px;">
+
+      <!-- 02 · Brief -->
+      <div style="flex:1 1 380px;min-width:0;display:flex;flex-direction:column;gap:18px;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <span class="mono grad-text" style="font-size:13px;font-weight:500;">02</span>
+          <span class="mono" style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.5);">Tu brief</span>
+          <span style="flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,0.13),transparent);"></span>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:18px;">
+          <textarea id="brief" placeholder="Describí qué querés generar. Ej: un anuncio de lanzamiento para la nueva función de exportación…" style="width:100%;min-height:210px;resize:vertical;background:transparent;border:none;color:#f5f5f5;font-size:15px;line-height:1.62;padding:0;display:block;"></textarea>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid rgba(255,255,255,0.06);">
+            <span id="charCount" class="mono" style="font-size:11px;color:rgba(255,255,255,0.38);">0 / 4000</span>
+            <span class="mono" style="font-size:11px;color:rgba(255,255,255,0.38);">⌘ / Ctrl + ↵</span>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:12px;align-items:center;">
+          <button id="generateBtn" disabled style="display:flex;align-items:center;gap:9px;padding:13px 22px;border-radius:12px;border:none;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.32);font-size:15px;font-weight:600;letter-spacing:-0.01em;cursor:not-allowed;transition:all 160ms ease;">Generar texto</button>
+          <button id="stopBtn" style="display:none;padding:13px 18px;border-radius:12px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.03);color:rgba(255,255,255,0.7);font-size:14px;font-weight:500;cursor:pointer;" class="ghost-hover">Detener</button>
+        </div>
+
+        <!-- Parámetros -->
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;">
+          <button id="paramsToggle" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:16px 18px;background:transparent;border:none;color:#f5f5f5;cursor:pointer;">
+            <span class="mono" style="font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.6);">Parámetros</span>
+            <span id="paramsChevron" style="font-size:18px;color:rgba(255,255,255,0.5);transition:transform 200ms ease;display:inline-block;line-height:1;">⌄</span>
+          </button>
+          <div id="paramsBody" style="padding:4px 18px 20px;display:flex;flex-direction:column;gap:20px;border-top:1px solid rgba(255,255,255,0.06);">
+            <div style="display:flex;flex-direction:column;gap:9px;padding-top:16px;">
+              <label style="font-size:13px;color:rgba(255,255,255,0.7);">Modelo Ollama</label>
+              <select id="modelSelect" class="mono" style="width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:11px 13px;color:#f5f5f5;font-size:14px;cursor:pointer;"></select>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:9px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <label style="font-size:13px;color:rgba(255,255,255,0.7);">Temperature</label>
+                <span id="tempVal" class="mono" style="font-size:12px;color:#a5b4fc;">0.70</span>
+              </div>
+              <input id="temp" type="range" min="0" max="1" step="0.05" value="0.7" style="width:100%;accent-color:#8b5cf6;cursor:pointer;">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:9px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;">
+                <label style="font-size:13px;color:rgba(255,255,255,0.7);">Retrieval top-k <span style="color:rgba(255,255,255,0.4);font-size:12px;">— ejemplos few-shot</span></label>
+                <span id="topkVal" class="mono" style="font-size:12px;color:#a5b4fc;">4</span>
+              </div>
+              <input id="topk" type="range" min="1" max="8" step="1" value="4" style="width:100%;accent-color:#8b5cf6;cursor:pointer;">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:9px;">
+              <label style="font-size:13px;color:rgba(255,255,255,0.7);">Max tokens</label>
+              <select id="maxTokens" class="mono" style="width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:11px 13px;color:#f5f5f5;font-size:14px;cursor:pointer;">
+                <option value="256">256</option>
+                <option value="512">512</option>
+                <option value="1024" selected>1024</option>
+                <option value="2048">2048</option>
+                <option value="4096">4096</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 03 · Resultado -->
+      <div style="flex:1 1 440px;min-width:0;display:flex;flex-direction:column;gap:18px;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <span class="mono grad-text" style="font-size:13px;font-weight:500;">03</span>
+          <span class="mono" style="font-size:12px;letter-spacing:0.18em;text-transform:uppercase;color:rgba(255,255,255,0.5);">Resultado</span>
+          <span style="flex:1;height:1px;background:linear-gradient(90deg,rgba(255,255,255,0.13),transparent);"></span>
+        </div>
+
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;">
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:14px 18px;border-bottom:1px solid rgba(255,255,255,0.06);">
+            <span id="outputLabel" class="mono" style="font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.6);">resultado</span>
+            <div id="outputActions" style="display:none;gap:8px;"></div>
+          </div>
+          <div id="resultBody" style="padding:22px;min-height:280px;"></div>
+        </div>
+
+        <!-- Ejemplos recuperados -->
+        <div style="background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.08);border-radius:16px;overflow:hidden;">
+          <button id="retrievedToggle" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:16px 18px;background:transparent;border:none;color:#f5f5f5;cursor:pointer;">
+            <span style="display:flex;align-items:center;gap:10px;">
+              <span class="mono" style="font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:rgba(255,255,255,0.6);">Ejemplos recuperados</span>
+              <span id="retrievedCount" class="mono" style="font-size:11px;color:#a5b4fc;padding:2px 8px;border-radius:999px;border:1px solid rgba(129,140,248,0.3);background:rgba(99,102,241,0.1);">0</span>
+            </span>
+            <span id="retrievedChevron" style="font-size:18px;color:rgba(255,255,255,0.5);transition:transform 200ms ease;display:inline-block;line-height:1;">⌄</span>
+          </button>
+          <div id="retrievedBody" style="padding:4px 18px 18px;border-top:1px solid rgba(255,255,255,0.06);"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ===== Config =====
+  // Backend por defecto; overridable con ?api=http://host:port
+  const API_BASE = (new URLSearchParams(location.search).get("api")
+    || "http://localhost:8000").replace(/\/$/, "");
+
+  const GRAD = "linear-gradient(120deg,#38bdf8 0%,#6366f1 52%,#a855f7 100%)";
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+  // ===== State =====
+  const S = {
+    profiles: [],
+    selectedProfileId: null,
+    model: "llama3.1",
+    temperature: 0.7,
+    retrievalTopK: 4,
+    maxTokens: 1024,
+    output: "",
+    retrieved: [],
+    loading: false,
+    streaming: false,
+    error: null,
+    health: "checking",
+    paramsOpen: true,
+    retrievedOpen: true,
+    editing: false,
+    backend: false,
+    ingestOpen: false,
+    ingestName: "",
+    ingestDesc: "",
+    ingestFiles: [],
+    ingesting: false,
+    dragOver: false,
+    cancelled: false,
+  };
+
+  const $ = (id) => document.getElementById(id);
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // ===== API client (degrada a demo sin romper) =====
+  async function loadProfiles() {
+    try {
+      const r = await fetch(API_BASE + "/profiles");
+      if (!r.ok) throw new Error("profiles " + r.status);
+      const data = await r.json();
+      if (Array.isArray(data) && data.length) { S.profiles = data; S.backend = true; return; }
+      if (Array.isArray(data)) { S.profiles = data; S.backend = true; return; }
+    } catch (e) { /* demo */ }
+    S.profiles = mockProfiles();
+  }
+
+  async function loadModels() {
+    let models = ["llama3.1", "llama3.2", "mistral", "qwen2.5", "phi3"];
+    try {
+      const r = await fetch(API_BASE + "/models");
+      if (r.ok) {
+        const data = await r.json();
+        if (Array.isArray(data) && data.length) models = data.map((m) => m.name || m);
+      }
+    } catch (e) { /* default list */ }
+    const sel = $("modelSelect");
+    sel.innerHTML = models.map((m) => `<option value="${esc(m)}">${esc(m)}</option>`).join("");
+    if (!models.includes(S.model)) S.model = models[0];
+    sel.value = S.model;
+    $("modelPill").textContent = S.model;
+  }
+
+  async function checkHealth() {
+    try {
+      const r = await fetch(API_BASE + "/health");
+      const j = await r.json();
+      S.health = (j.ok && j.ollama) ? "online" : "degraded";
+      S.backend = true;
+    } catch (e) { S.health = "demo"; S.backend = false; }
+    renderHealth();
+  }
+
+  // ===== Generación con streaming SSE =====
+  async function generate() {
+    if (!S.selectedProfileId || !$("brief").value.trim() || S.loading) return;
+    S.cancelled = false;
+    S.loading = true; S.streaming = true; S.error = null;
+    S.output = ""; S.retrieved = []; S.editing = false;
+    renderGenerateState();
+    renderResult();
+    renderRetrieved();
+
+    const body = {
+      profileId: S.selectedProfileId,
+      prompt: $("brief").value,
+      model: S.model,
+      temperature: S.temperature,
+      retrievalTopK: S.retrievalTopK,
+      maxTokens: S.maxTokens,
+    };
+
+    if (S.backend) {
+      try {
+        const r = await fetch(API_BASE + "/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Accept": "text/event-stream" },
+          body: JSON.stringify(body),
+        });
+        if (!r.ok) {
+          let detail = "HTTP " + r.status;
+          try { detail = (await r.json()).detail || detail; } catch (_) {}
+          throw new Error(detail);
+        }
+        const reader = r.body.getReader();
+        const dec = new TextDecoder();
+        let buf = "";
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done || S.cancelled) break;
+          buf += dec.decode(value, { stream: true });
+          const parts = buf.split("\n\n");
+          buf = parts.pop();
+          for (const part of parts) {
+            const line = part.split("\n").find((l) => l.startsWith("data:"));
+            if (!line) continue;
+            const payload = line.slice(5).trim();
+            if (payload === "[DONE]") continue;
+            try {
+              const ev = JSON.parse(payload);
+              if (ev.retrieved) { S.retrieved = ev.retrieved; renderRetrieved(); }
+              if (ev.token || ev.delta) appendToken(ev.token || ev.delta);
+              if (ev.output) { S.output = ev.output; renderResult(); }
+            } catch (_) { appendToken(payload); }
+          }
+        }
+        S.loading = false; S.streaming = false;
+        renderGenerateState(); finishOutput();
+        return;
+      } catch (e) {
+        S.error = "No se pudo generar con el backend (" + e.message + "). Mostrando una salida de demostración.";
+        renderResult();
+      }
+    }
+
+    // Demo
+    await sleep(450);
+    if (S.cancelled) { S.loading = false; S.streaming = false; renderGenerateState(); return; }
+    S.retrieved = mockRetrieved(S.selectedProfileId, S.retrievalTopK);
+    renderRetrieved();
+    await sleep(220);
+    await streamText(mockOutput(S.selectedProfileId, $("brief").value));
+    S.loading = false; S.streaming = false;
+    renderGenerateState(); finishOutput();
+  }
+
+  function appendToken(t) {
+    if (!S.output) { S.output = t; renderResult(); }
+    else {
+      S.output += t;
+      const node = $("outputText");
+      if (node) node.textContent = S.output;
+      else renderResult();
+    }
+  }
+
+  function finishOutput() {
+    const cur = $("outputCursor");
+    if (cur) cur.remove();
+    renderOutputActions();
+  }
+
+  async function streamText(full) {
+    S.output = "";
+    const parts = full.split(/(\s+)/);
+    for (let i = 0; i < parts.length; i++) {
+      if (S.cancelled) return;
+      await sleep(15 + Math.random() * 26);
+      appendToken(parts[i]);
+    }
+  }
+
+  function stop() { S.cancelled = true; S.loading = false; S.streaming = false; renderGenerateState(); finishOutput(); }
+
+  async function copyOutput(btn) {
+    try { await navigator.clipboard.writeText(S.output); } catch (e) {}
+    if (btn) { btn.textContent = "copiado ✓"; setTimeout(() => { btn.textContent = "copiar"; }, 1600); }
+  }
+
+  // ===== Ingesta =====
+  function formatSize(b) {
+    if (b < 1024) return b + " B";
+    if (b < 1024 * 1024) return (b / 1024).toFixed(1) + " KB";
+    return (b / 1024 / 1024).toFixed(1) + " MB";
+  }
+  function estimateExamples(file, text) {
+    if (text != null) {
+      const blocks = text.split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+      return Math.max(1, blocks.length);
+    }
+    return Math.max(1, Math.round(file.size / 800));
+  }
+  async function addFiles(fileList) {
+    const incoming = Array.from(fileList || []);
+    for (const f of incoming) {
+      if (S.ingestFiles.some((e) => e.name === f.name && e.size === f.size)) continue;
+      const isText = /\.(txt|md|markdown|csv|json|html?)$/i.test(f.name) || (f.type && f.type.startsWith("text"));
+      let examples;
+      if (isText) { try { examples = estimateExamples(f, await f.text()); } catch (e) { examples = estimateExamples(f, null); } }
+      else { examples = estimateExamples(f, null); }
+      S.ingestFiles.push({ name: f.name, size: f.size, examples, file: f });
+    }
+    renderIngest();
+  }
+  function removeFile(name, size) {
+    S.ingestFiles = S.ingestFiles.filter((f) => !(f.name === name && f.size === size));
+    renderIngest();
+  }
+  function slug(s) {
+    return s.toLowerCase().trim().normalize("NFD").replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || ("perfil-" + Date.now());
+  }
+  async function createProfile() {
+    const name = S.ingestName.trim();
+    if (!name || S.ingestFiles.length === 0 || S.ingesting) return;
+    S.ingesting = true; renderIngest();
+
+    const examplesCount = S.ingestFiles.reduce((a, f) => a + f.examples, 0);
+    const desc = S.ingestDesc.trim() || ("Voz creada a partir de " + S.ingestFiles.length + " archivo(s).");
+    let id = slug(name), realCount = null, ok = false;
+
+    if (S.backend) {
+      try {
+        const fd = new FormData();
+        fd.append("name", name);
+        fd.append("description", desc);
+        S.ingestFiles.forEach((f) => fd.append("files", f.file, f.name));
+        const r = await fetch(API_BASE + "/profiles", { method: "POST", body: fd });
+        if (r.ok) { const j = await r.json(); if (j && j.id) { id = j.id; realCount = j.examplesCount; ok = true; } }
+        else { let d = "HTTP " + r.status; try { d = (await r.json()).detail || d; } catch (_) {} throw new Error(d); }
+      } catch (e) {
+        S.ingesting = false;
+        S.error = "No se pudo crear el perfil en el backend (" + e.message + ").";
+        renderIngest(); renderResult();
+        return;
+      }
+    } else {
+      await sleep(900);
+    }
+
+    if (S.profiles.some((p) => p.id === id)) id = id + "-" + String(Date.now()).slice(-4);
+    S.profiles.push({ id, name: ok ? id : name, description: desc, examplesCount: realCount != null ? realCount : examplesCount, custom: true });
+    S.selectedProfileId = id;
+    S.ingesting = false; S.ingestOpen = false;
+    S.ingestName = ""; S.ingestDesc = ""; S.ingestFiles = []; S.dragOver = false;
+    renderProfiles(); renderIngest(); renderOutputLabel();
+  }
+
+  // ===== Render =====
+  function renderHealth() {
+    const map = {
+      checking: { c: "#9ca3af", l: "verificando…" },
+      demo: { c: "#f5b942", l: "modo demo" },
+      online: { c: "#34d399", l: "ollama activo" },
+      degraded: { c: "#f5b942", l: "backend degradado" },
+      offline: { c: "#f87171", l: "backend offline" },
+    };
+    const h = map[S.health] || map.checking;
+    const dot = $("healthDot");
+    dot.style.background = h.c;
+    dot.style.boxShadow = "0 0 9px " + h.c;
+    $("healthLabel").textContent = h.l;
+  }
+
+  function renderProfiles() {
+    const grid = $("profilesGrid");
+    const cards = S.profiles.map((p, i) => {
+      const sel = p.id === S.selectedProfileId;
+      const num = String(i + 1).padStart(2, "0");
+      return `<button data-pid="${esc(p.id)}" class="card-hover" style="text-align:left;cursor:pointer;padding:18px;border-radius:14px;background:${sel ? "rgba(99,102,241,0.09)" : "rgba(255,255,255,0.02)"};border:1px solid ${sel ? "rgba(129,140,248,0.6)" : "rgba(255,255,255,0.08)"};box-shadow:${sel ? "0 0 0 1px rgba(129,140,248,0.25), 0 10px 34px rgba(80,70,200,0.18)" : "none"};transition:all 180ms ease;color:#f5f5f5;display:flex;flex-direction:column;gap:9px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <span class="mono grad-text" style="font-size:12px;font-weight:500;">${num}</span>
+          <span class="mono" style="font-size:11px;color:rgba(255,255,255,0.4);">${esc(p.examplesCount)} ejemplos</span>
+        </div>
+        <div style="font-size:18px;font-weight:600;letter-spacing:-0.01em;">${esc(p.name)}</div>
+        <div style="font-size:13px;line-height:1.5;color:rgba(255,255,255,0.52);">${esc(p.description || "")}</div>
+      </button>`;
+    }).join("");
+
+    const newBtn = `<button id="newProfileBtn" class="card-hover" style="text-align:left;cursor:pointer;padding:18px;border-radius:14px;background:rgba(255,255,255,0.012);border:1px dashed rgba(255,255,255,0.18);color:#f5f5f5;display:flex;flex-direction:column;gap:9px;justify-content:center;min-height:120px;transition:all 180ms ease;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <span style="width:26px;height:26px;border-radius:8px;border:1px solid rgba(129,140,248,0.5);display:flex;align-items:center;justify-content:center;font-size:19px;line-height:1;color:#a5b4fc;background:rgba(99,102,241,0.08);">+</span>
+        <span style="font-size:17px;font-weight:600;letter-spacing:-0.01em;">Nuevo perfil</span>
+      </div>
+      <div style="font-size:13px;line-height:1.5;color:rgba(255,255,255,0.45);">Ingestá tus archivos para crear una voz nueva.</div>
+    </button>`;
+
+    grid.innerHTML = cards + newBtn;
+    grid.querySelectorAll("[data-pid]").forEach((b) =>
+      b.addEventListener("click", () => { S.selectedProfileId = b.dataset.pid; renderProfiles(); renderOutputLabel(); }));
+    $("newProfileBtn").addEventListener("click", () => { S.ingestOpen = !S.ingestOpen; renderIngest(); });
+  }
+
+  function renderIngest() {
+    const panel = $("ingestPanel");
+    if (!S.ingestOpen) { panel.innerHTML = ""; return; }
+    const total = S.ingestFiles.reduce((a, f) => a + f.examples, 0);
+    const canCreate = !!(S.ingestName.trim() && S.ingestFiles.length && !S.ingesting);
+    const fileRows = S.ingestFiles.map((f) => `
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);">
+        <div style="min-width:0;display:flex;flex-direction:column;gap:2px;">
+          <span style="font-size:13px;color:rgba(255,255,255,0.85);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(f.name)}</span>
+          <span class="mono" style="font-size:10.5px;color:rgba(255,255,255,0.4);">${esc(formatSize(f.size))} · ~${f.examples} ej.</span>
+        </div>
+        <button data-rm="${esc(f.name)}" data-sz="${f.size}" class="ghost-hover" style="flex:none;width:24px;height:24px;border-radius:7px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.5);cursor:pointer;font-size:14px;line-height:1;">×</button>
+      </div>`).join("");
+
+    panel.innerHTML = `<div style="margin-top:18px;background:rgba(255,255,255,0.02);border:1px solid rgba(129,140,248,0.28);border-radius:16px;padding:22px;animation:scrivo-fade 240ms ease;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;margin-bottom:20px;">
+        <div>
+          <div style="font-size:17px;font-weight:600;letter-spacing:-0.01em;">Crear perfil desde archivos</div>
+          <div style="font-size:13px;color:rgba(255,255,255,0.5);margin-top:5px;line-height:1.5;max-width:520px;">Los documentos se trocean e indexan como corpus de ejemplos few-shot para guiar a la nueva voz.</div>
+        </div>
+        <button id="ingestClose" class="ghost-hover" style="flex:none;width:30px;height:30px;border-radius:9px;border:1px solid rgba(255,255,255,0.1);background:transparent;color:rgba(255,255,255,0.55);cursor:pointer;font-size:17px;line-height:1;">×</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:20px;">
+        <div style="flex:1 1 240px;min-width:0;display:flex;flex-direction:column;gap:16px;">
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <label style="font-size:13px;color:rgba(255,255,255,0.7);">Nombre del perfil</label>
+            <input id="ingestName" value="${esc(S.ingestName)}" placeholder="Ej: Soporte técnico" style="width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:11px 13px;color:#f5f5f5;font-size:14px;">
+          </div>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <label style="font-size:13px;color:rgba(255,255,255,0.7);">Descripción <span style="color:rgba(255,255,255,0.4);">(opcional)</span></label>
+            <textarea id="ingestDesc" placeholder="Voz cercana, resolutiva y sin tecnicismos…" style="width:100%;min-height:88px;resize:vertical;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.1);border-radius:10px;padding:11px 13px;color:#f5f5f5;font-size:14px;line-height:1.55;">${esc(S.ingestDesc)}</textarea>
+          </div>
+        </div>
+        <div style="flex:1 1 260px;min-width:0;display:flex;flex-direction:column;gap:12px;">
+          <label id="dropzone" style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:24px 16px;border-radius:13px;cursor:pointer;text-align:center;border:1px dashed ${S.dragOver ? "rgba(129,140,248,0.7)" : "rgba(255,255,255,0.18)"};background:${S.dragOver ? "rgba(99,102,241,0.09)" : "rgba(255,255,255,0.015)"};transition:all 150ms ease;">
+            <input id="filePick" type="file" multiple accept=".txt,.md,.markdown,.pdf,.png,.jpg,.jpeg" style="display:none;">
+            <span style="width:34px;height:34px;border-radius:10px;border:1px solid rgba(129,140,248,0.4);display:flex;align-items:center;justify-content:center;color:#a5b4fc;font-size:17px;background:rgba(99,102,241,0.08);">↑</span>
+            <span style="font-size:14px;color:rgba(255,255,255,0.75);">Arrastrá archivos o <span style="color:#a5b4fc;">elegilos</span></span>
+            <span class="mono" style="font-size:10.5px;color:rgba(255,255,255,0.35);letter-spacing:0.04em;">.txt · .md · .pdf · imágenes</span>
+          </label>
+          ${S.ingestFiles.length ? `<div style="display:flex;flex-direction:column;gap:8px;">${fileRows}</div>` : ""}
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:14px;margin-top:22px;padding-top:18px;border-top:1px solid rgba(255,255,255,0.06);flex-wrap:wrap;">
+        <span class="mono" style="font-size:12px;color:rgba(255,255,255,0.5);">${S.ingestFiles.length ? `~${total} ejemplos · ${S.ingestFiles.length} archivo${S.ingestFiles.length > 1 ? "s" : ""}` : "Sumá al menos un archivo para crear el perfil."}</span>
+        <div style="display:flex;gap:10px;">
+          <button id="ingestCancel" class="ghost-hover" style="padding:11px 18px;border-radius:11px;border:1px solid rgba(255,255,255,0.12);background:transparent;color:rgba(255,255,255,0.7);font-size:14px;cursor:pointer;">Cancelar</button>
+          <button id="ingestCreate" ${canCreate ? "" : "disabled"} style="display:flex;align-items:center;gap:9px;padding:11px 20px;border-radius:11px;border:none;background:${canCreate ? GRAD : "rgba(255,255,255,0.06)"};color:${canCreate ? "#0a0a0a" : "rgba(255,255,255,0.32)"};font-size:14px;font-weight:600;cursor:${canCreate ? "pointer" : "not-allowed"};transition:all 160ms ease;">${S.ingesting ? `<span style="width:14px;height:14px;border:2px solid rgba(10,10,10,0.3);border-top-color:#0a0a0a;border-radius:50%;display:inline-block;animation:scrivo-spin 0.7s linear infinite;"></span>Procesando…` : "Crear perfil"}</button>
+        </div>
+      </div>
+    </div>`;
+
+    $("ingestClose").addEventListener("click", cancelIngest);
+    $("ingestCancel").addEventListener("click", cancelIngest);
+    $("ingestCreate").addEventListener("click", createProfile);
+    $("ingestName").addEventListener("input", (e) => { S.ingestName = e.target.value; refreshCreateBtn(); });
+    $("ingestDesc").addEventListener("input", (e) => { S.ingestDesc = e.target.value; });
+    const dz = $("dropzone");
+    $("filePick").addEventListener("change", (e) => { addFiles(e.target.files); e.target.value = ""; });
+    dz.addEventListener("dragover", (e) => { e.preventDefault(); if (!S.dragOver) { S.dragOver = true; renderIngest(); } });
+    dz.addEventListener("dragleave", (e) => { e.preventDefault(); S.dragOver = false; renderIngest(); });
+    dz.addEventListener("drop", (e) => { e.preventDefault(); S.dragOver = false; addFiles(e.dataTransfer.files); });
+    panel.querySelectorAll("[data-rm]").forEach((b) =>
+      b.addEventListener("click", () => removeFile(b.dataset.rm, parseInt(b.dataset.sz, 10))));
+  }
+
+  function refreshCreateBtn() {
+    const btn = $("ingestCreate");
+    if (!btn) return;
+    const can = !!(S.ingestName.trim() && S.ingestFiles.length && !S.ingesting);
+    btn.disabled = !can;
+    btn.style.background = can ? GRAD : "rgba(255,255,255,0.06)";
+    btn.style.color = can ? "#0a0a0a" : "rgba(255,255,255,0.32)";
+    btn.style.cursor = can ? "pointer" : "not-allowed";
+  }
+
+  function cancelIngest() {
+    S.ingestOpen = false; S.ingestName = ""; S.ingestDesc = ""; S.ingestFiles = []; S.dragOver = false;
+    renderIngest();
+  }
+
+  function renderOutputLabel() {
+    const p = S.profiles.find((x) => x.id === S.selectedProfileId);
+    $("outputLabel").textContent = p ? ("perfil · " + p.name.toLowerCase()) : "resultado";
+  }
+
+  function renderGenerateState() {
+    const btn = $("generateBtn");
+    const can = !!(S.selectedProfileId && $("brief").value.trim() && !S.loading);
+    btn.disabled = !can;
+    btn.style.background = can ? GRAD : "rgba(255,255,255,0.06)";
+    btn.style.color = can ? "#0a0a0a" : "rgba(255,255,255,0.32)";
+    btn.style.cursor = can ? "pointer" : "not-allowed";
+    btn.style.boxShadow = can ? "0 8px 26px rgba(99,102,241,0.32)" : "none";
+    btn.innerHTML = S.loading
+      ? `<span style="width:14px;height:14px;border:2px solid rgba(10,10,10,0.3);border-top-color:#0a0a0a;border-radius:50%;display:inline-block;animation:scrivo-spin 0.7s linear infinite;"></span>Generando…`
+      : "Generar texto";
+    $("stopBtn").style.display = S.loading ? "block" : "none";
+  }
+
+  function renderResult() {
+    const body = $("resultBody");
+    const hasOutput = S.output.length > 0;
+    let html = "";
+
+    if (S.error) {
+      html += `<div style="display:flex;gap:10px;align-items:flex-start;padding:13px 15px;border-radius:11px;border:1px solid rgba(248,113,113,0.3);background:rgba(248,113,113,0.08);margin-bottom:18px;">
+        <span style="color:#f87171;font-size:15px;line-height:1.3;">⚠</span>
+        <span style="font-size:13px;line-height:1.55;color:rgba(255,255,255,0.78);">${esc(S.error)}</span></div>`;
+    }
+
+    if (S.loading && !hasOutput) {
+      html += `<div style="display:flex;flex-direction:column;gap:13px;">${[42, 96, 88, 70].map((w) =>
+        `<div style="height:13px;width:${w}%;border-radius:6px;background:linear-gradient(90deg,rgba(255,255,255,0.04),rgba(255,255,255,0.1),rgba(255,255,255,0.04));background-size:800px 100%;animation:scrivo-shimmer 1.4s linear infinite;"></div>`).join("")}</div>`;
+    } else if (hasOutput) {
+      html += `<div style="font-size:15px;line-height:1.72;color:rgba(255,255,255,0.9);white-space:pre-wrap;word-break:break-word;"><span id="outputText">${esc(S.output)}</span>${S.streaming ? `<span id="outputCursor" style="display:inline-block;width:8px;height:17px;background:#a855f7;margin-left:2px;vertical-align:text-bottom;animation:scrivo-blink 1s step-end infinite;"></span>` : ""}</div>`;
+    } else if (!S.error) {
+      html += `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;min-height:240px;gap:16px;">
+        <div style="width:46px;height:46px;border-radius:13px;border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.02);">
+          <div style="width:18px;height:18px;border-radius:6px;background:linear-gradient(135deg,#38bdf8,#a855f7);opacity:0.7;"></div>
+        </div>
+        <div style="font-size:15px;color:rgba(255,255,255,0.6);max-width:320px;line-height:1.55;">El texto generado va a aparecer acá.<br>Elegí un perfil, escribí tu brief y presioná <span class="mono" style="font-size:12px;color:rgba(255,255,255,0.5);">Generar</span>.</div></div>`;
+    }
+    body.innerHTML = html;
+    renderOutputActions();
+  }
+
+  function renderOutputActions() {
+    const wrap = $("outputActions");
+    if (!S.output.length) { wrap.style.display = "none"; wrap.innerHTML = ""; return; }
+    wrap.style.display = "flex";
+    const btn = (id, label) => `<button id="${id}" class="ghost-hover mono" style="display:flex;align-items:center;gap:6px;padding:6px 11px;border-radius:8px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.02);color:rgba(255,255,255,0.7);font-size:11px;cursor:pointer;">${label}</button>`;
+    wrap.innerHTML = btn("copyBtn", "copiar") + btn("regenBtn", "regenerar");
+    $("copyBtn").addEventListener("click", (e) => copyOutput(e.target));
+    $("regenBtn").addEventListener("click", generate);
+  }
+
+  function renderRetrieved() {
+    $("retrievedCount").textContent = S.retrieved.length || S.retrievalTopK;
+    const body = $("retrievedBody");
+    body.style.display = S.retrievedOpen ? "block" : "none";
+    if (!S.retrieved.length) {
+      body.innerHTML = `<div style="padding:24px 4px;text-align:center;font-size:13px;line-height:1.55;color:rgba(255,255,255,0.4);">Los ejemplos del corpus aparecerán acá al generar,<br>cada uno con su score de similitud y su fuente.</div>`;
+      return;
+    }
+    body.innerHTML = `<div style="display:flex;flex-direction:column;gap:11px;padding-top:16px;">` + S.retrieved.map((it) => {
+      const score = typeof it.score === "number" ? it.score : parseFloat(it.score);
+      const pct = Math.round(Math.max(0, Math.min(1, score || 0)) * 100);
+      const scoreText = Number.isNaN(score) ? "azar" : score.toFixed(2);
+      return `<div style="padding:14px;border-radius:12px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.07);display:flex;flex-direction:column;gap:9px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">
+          <span class="mono" style="font-size:11px;color:rgba(255,255,255,0.42);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${esc(it.source)}</span>
+          <span class="mono grad-text" style="font-size:12px;font-weight:500;white-space:nowrap;">${esc(scoreText)}</span>
+        </div>
+        <div style="font-size:13px;line-height:1.55;color:rgba(255,255,255,0.66);">${esc(it.text)}</div>
+        <div style="height:3px;border-radius:2px;background:rgba(255,255,255,0.08);overflow:hidden;"><div style="height:100%;width:${pct}%;background:linear-gradient(90deg,#38bdf8,#a855f7);border-radius:2px;transition:width 400ms ease;"></div></div>
+      </div>`;
+    }).join("") + `</div>`;
+  }
+
+  // ===== Mock data (modo demo) =====
+  function mockProfiles() {
+    return [
+      { id: "tecnico", name: "Técnico", description: "Documentación precisa, voz neutra y foco en la exactitud.", examplesCount: 142 },
+      { id: "marketing", name: "Marketing", description: "Persuasivo y enérgico, orientado a la conversión.", examplesCount: 98 },
+      { id: "narrativo", name: "Narrativo", description: "Storytelling envolvente, con ritmo y emoción.", examplesCount: 76 },
+      { id: "legal", name: "Formal / Legal", description: "Lenguaje formal, estructurado y cauteloso.", examplesCount: 54 },
+    ];
+  }
+  function retrievalPools() {
+    return {
+      tecnico: [
+        { source: "docs/api-reference.md", text: "El endpoint acepta un cuerpo JSON con los campos requeridos; cualquier parámetro adicional se ignora para mantener compatibilidad hacia atrás." },
+        { source: "guides/deployment.md", text: "Antes de promover a producción, validá las variables de entorno y ejecutá la suite de smoke tests contra staging." },
+        { source: "changelog/v2.4.md", text: "Se corrige una condición de carrera en el pool de conexiones que derivaba en timeouts intermitentes bajo alta concurrencia." },
+        { source: "docs/auth.md", text: "Los tokens expiran a los 3600 segundos; implementá refresh anticipado para evitar cortes de sesión en operaciones largas." },
+      ],
+      marketing: [
+        { source: "campañas/q3-launch.md", text: "No es una actualización más: es el salto que tu equipo venía esperando. Menos fricción, más resultados, desde el día uno." },
+        { source: "landing/hero-variants.md", text: "Convertí visitantes en clientes con una propuesta que se entiende en cinco segundos y se siente imposible de ignorar." },
+        { source: "emails/nurture-3.md", text: "Sabemos que el tiempo te corre. Por eso lo hicimos simple: activás, configurás y ya estás generando valor." },
+        { source: "social/launch-thread.md", text: "Spoiler: tus métricas no van a volver a ser las mismas. Y esto es apenas el principio." },
+      ],
+      narrativo: [
+        { source: "relatos/origen.md", text: "Todo empezó con una pregunta incómoda, de esas que se quedan dando vueltas hasta que no queda más remedio que responderlas." },
+        { source: "blog/historia-cliente.md", text: "Marta no buscaba revolucionar nada. Solo quería que el lunes a la mañana dejara de pesar tanto. Y entonces algo cambió." },
+        { source: "guion/spot-30s.md", text: "Hay momentos que no se planean: se reconocen. Este es uno de esos, y vos estás justo en el medio." },
+        { source: "newsletter/05.md", text: "Te lo cuento como me lo contaron a mí: bajito, casi al oído, porque las mejores ideas nunca llegan gritando." },
+      ],
+      legal: [
+        { source: "contratos/marco-servicios.md", text: "Las Partes acuerdan que toda modificación al presente deberá constar por escrito y ser suscripta por representantes autorizados." },
+        { source: "politicas/privacidad.md", text: "El Responsable tratará los datos personales con la finalidad exclusiva indicada, conservándolos por el plazo legalmente exigible." },
+        { source: "tos/v3.md", text: "El Usuario reconoce y acepta que el uso del Servicio se rige por los términos aquí dispuestos, sin reserva alguna." },
+        { source: "compliance/nda.md", text: "La información confidencial no podrá divulgarse a terceros sin el consentimiento previo y expreso de la Parte Reveladora." },
+      ],
+    };
+  }
+  function mockRetrieved(id, k) {
+    const pool = retrievalPools()[id] || retrievalPools().tecnico;
+    const out = [];
+    for (let i = 0; i < k; i++) {
+      const b = pool[i % pool.length];
+      out.push({ source: b.source, text: b.text, score: Math.max(0.41, 0.94 - i * 0.075 - Math.random() * 0.025) });
+    }
+    return out;
+  }
+  function mockOutput(id, prompt) {
+    const snippet = (prompt || "").trim().replace(/\s+/g, " ").slice(0, 70);
+    const tail = (prompt || "").trim().length > 70 ? "…" : "";
+    const map = {
+      tecnico: `Resumen\n\nLa funcionalidad descrita se implementa siguiendo el patrón establecido en el resto del sistema: la entrada se valida, los parámetros se normalizan y el procesamiento se delega a la capa correspondiente, devolviendo una respuesta tipada y predecible.\n\nConsideraciones clave\n• Manejar los casos de borde de forma explícita y nunca de manera silenciosa.\n• Registrar métricas de latencia y tasa de error por endpoint.\n• Exponer fallos con un código y un mensaje accionables.\n\nToda la lógica nueva queda cubierta por tests antes de promoverse a producción.`,
+      marketing: `Imaginá resolver "${snippet}${tail}" sin esfuerzo. Eso es exactamente lo que esto hace —y lo hace en serio.\n\nNada de promesas vacías ni pasos de más. Una sola activación y tu equipo empieza a moverse más rápido, con menos fricción y resultados que se notan desde el primer día.\n\n¿Lo mejor? No tenés que cambiar tu forma de trabajar. Se adapta a vos.\n\nProbalo hoy. Mañana no vas a entender cómo trabajabas sin esto.`,
+      narrativo: `Todo empezó con "${snippet}${tail}". Una idea pequeña, casi tímida, de esas que uno deja para después.\n\nPero las ideas pequeñas tienen una manía: crecen cuando nadie las mira. Y esta creció. Primero fue una pregunta, después una obsesión, y al final, sin que nos diéramos cuenta, se había vuelto el centro de todo.\n\nLo que sigue no lo planeamos. Simplemente, un día, estaba ahí. Y ya nada volvió a ser igual.`,
+      legal: `CLÁUSULA PRIMERA — Objeto\n\nEl presente instrumento tiene por objeto regular los términos y condiciones relativos a "${snippet}${tail}", conforme a la voluntad expresada por las Partes.\n\nCLÁUSULA SEGUNDA — Obligaciones\n\nLas Partes se obligan a cumplir de buena fe las disposiciones aquí acordadas.\n\nCLÁUSULA TERCERA — Vigencia\n\nLo aquí dispuesto entrará en vigor a partir de su suscripción.`,
+    };
+    return map[id] || map.tecnico;
+  }
+
+  // ===== Wiring estático =====
+  $("brief").addEventListener("input", (e) => {
+    if (e.target.value.length > 4000) e.target.value = e.target.value.slice(0, 4000);
+    $("charCount").textContent = e.target.value.length + " / 4000";
+    renderGenerateState();
+  });
+  $("brief").addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); generate(); }
+  });
+  $("generateBtn").addEventListener("click", generate);
+  $("stopBtn").addEventListener("click", stop);
+  $("modelSelect").addEventListener("change", (e) => { S.model = e.target.value; $("modelPill").textContent = S.model; });
+  $("temp").addEventListener("input", (e) => { S.temperature = parseFloat(e.target.value); $("tempVal").textContent = S.temperature.toFixed(2); });
+  $("topk").addEventListener("input", (e) => { S.retrievalTopK = parseInt(e.target.value, 10); $("topkVal").textContent = S.retrievalTopK; renderRetrieved(); });
+  $("maxTokens").addEventListener("change", (e) => { S.maxTokens = parseInt(e.target.value, 10); });
+  $("paramsToggle").addEventListener("click", () => {
+    S.paramsOpen = !S.paramsOpen;
+    $("paramsBody").style.display = S.paramsOpen ? "flex" : "none";
+    $("paramsChevron").style.transform = S.paramsOpen ? "rotate(0deg)" : "rotate(-90deg)";
+  });
+  $("retrievedToggle").addEventListener("click", () => {
+    S.retrievedOpen = !S.retrievedOpen;
+    $("retrievedBody").style.display = S.retrievedOpen ? "block" : "none";
+    $("retrievedChevron").style.transform = S.retrievedOpen ? "rotate(0deg)" : "rotate(-90deg)";
+  });
+
+  // ===== Init =====
+  (async function init() {
+    await Promise.all([loadProfiles(), loadModels(), checkHealth()]);
+    if (!S.selectedProfileId && S.profiles.length) S.selectedProfileId = S.profiles[0].id;
+    renderProfiles();
+    renderIngest();
+    renderOutputLabel();
+    renderResult();
+    renderRetrieved();
+    renderGenerateState();
+  })();
+})();
+</script>
+</body>
+</html>

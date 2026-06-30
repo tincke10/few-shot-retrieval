@@ -1,0 +1,163 @@
+.app {
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+header h1 {
+  font-size: 40px;
+  letter-spacing: -1px;
+}
+
+.tagline {
+  margin-top: 6px;
+  font-size: 18px;
+}
+
+/* --- controls --- */
+.controls {
+  display: flex;
+  gap: 14px;
+  align-items: flex-end;
+  margin-top: 28px;
+  flex-wrap: wrap;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field.grow {
+  flex: 1 1 280px;
+}
+
+.field span {
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+select,
+input {
+  font: inherit;
+  color: var(--text-h);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+input:focus,
+select:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+button {
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: 8px;
+  padding: 11px 22px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.profile-desc {
+  margin-top: 14px;
+  font-style: italic;
+  font-size: 15px;
+}
+
+.error {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border-radius: 8px;
+  color: var(--danger);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  white-space: pre-wrap;
+}
+
+/* --- results --- */
+.results {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 28px;
+  margin-top: 32px;
+}
+
+@media (min-width: 760px) {
+  .results:has(.examples):has(.answer) {
+    grid-template-columns: 300px 1fr;
+  }
+}
+
+.examples h2,
+.answer h2 {
+  font-size: 18px;
+  margin-bottom: 14px;
+}
+
+.fragment {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+
+.fragment-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 8px;
+}
+
+.fragment-meta .source {
+  font-family: var(--mono);
+  color: var(--text-h);
+}
+
+.fragment-meta .score {
+  color: var(--accent);
+  white-space: nowrap;
+}
+
+.fragment p {
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.answer-text {
+  white-space: pre-wrap;
+  line-height: 1.7;
+  color: var(--text-h);
+  font-size: 17px;
+}
+
+.muted {
+  color: var(--text);
+}
+
+.cursor {
+  margin-left: 4px;
+  color: var(--accent);
+  animation: blink 1s steps(2) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}

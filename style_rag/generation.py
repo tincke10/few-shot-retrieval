@@ -89,3 +89,63 @@ def generate_with_ollama(prompt: str, model: str = config.OLLAMA_MODEL):
         )
     resp.raise_for_status()
     return resp.json().get("response", "").strip()
+
+
+def generate_with_ollama_stream(prompt: str, model: str = config.OLLAMA_MODEL,
+                                temperature: float | None = None,
+                                max_tokens: int | None = None):
+    """Same as generate_with_ollama but yields tokens as they arrive.
+
+    Used by the HTTP API so the web UI can stream the answer instead of waiting
+    for the whole thing. The CLI keeps using the blocking variant above.
+
+    `temperature` and `max_tokens` map to Ollama's `options.temperature` and
+    `options.num_predict`; both are optional so existing callers are unaffected.
+
+    Raises ConnectionError if Ollama isn't running and RuntimeError if the model
+    isn't pulled — same contract as the blocking version, so callers can map both
+    to the same user-facing messages.
+    """
+    import json
+
+    import requests
+
+    options = {}
+    if temperature is not None:
+        options["temperature"] = temperature
+    if max_tokens is not None:
+        options["num_predict"] = max_tokens
+
+    payload = {"model": model, "prompt": prompt, "stream": True}
+    if options:
+        payload["options"] = options
+
+    resp = requests.post(
+        config.OLLAMA_URL,
+        json=payload,
+        timeout=300,
+        stream=True,
+    )
+
+    if resp.status_code == 404:
+        detail = ""
+        try:
+            detail = resp.json().get("error", "")
+        except Exception:
+            pass
+        raise RuntimeError(
+            f"Ollama está corriendo pero el modelo '{model}' no está disponible"
+            + (f" ({detail})" if detail else "") + ".\n"
+            f"  Descargalo con:  ollama pull {model}"
+        )
+    resp.raise_for_status()
+
+    for line in resp.iter_lines(decode_unicode=True):
+        if not line:
+            continue
+        chunk = json.loads(line)
+        token = chunk.get("response", "")
+        if token:
+            yield token
+        if chunk.get("done"):
+            break

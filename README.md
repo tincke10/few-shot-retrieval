@@ -16,6 +16,9 @@ or *style-conditioning*.
 - 📥 **Multi-format ingestion** — `.txt` `.md` `.pdf` (text & scanned) and images,
   via a pluggable OCR backend (`tesseract` on CPU, `unlimited` on GPU).
 - 📝 **Long-form** — coherent multi-thousand-word texts via *plan → expand → edit*.
+- 🖥️ **Web UI** — a single-file standalone (`scrivo.html`, no build step) plus a
+  local FastAPI backend. Generate in a profile's voice from the browser, with
+  streaming, parameters and file-drop ingestion. See [Web UI](#web-ui).
 - 💻 **100% local & free** — `sentence-transformers` for embeddings, Ollama for
   generation. No API keys.
 
@@ -72,6 +75,32 @@ Use `outline` first if you want to review/edit the plan before expanding.
 | `outline <profile> "topic" --words N [-o]` | generate only the plan |
 | `compose <profile> "topic" --words N [--auto] [--from-outline] [--no-edit] [--model] [-o]` | long coherent text |
 
+## Web UI
+
+Prefer a browser to the CLI? A thin FastAPI layer (`api/`) exposes the same core
+over HTTP — it's a *second delivery layer*, like the CLI, with no business logic
+of its own. Two frontends consume it:
+
+- **`scrivo.html`** — a single-file standalone (HTML + vanilla JS, **no build
+  step**). Open it and write in a profile's voice: pick a profile, type a brief,
+  stream the result, tweak model / temperature / top-k / max-tokens, and create
+  new profiles by dropping files in. Falls back to a demo mode when no backend is
+  reachable.
+- **`web/`** — a React + Vite MVP (profile → retrieve → streamed explanation).
+
+```bash
+pip install -r api/requirements.txt
+uvicorn api.main:app --port 8000     # backend on :8000
+
+open scrivo.html                     # the standalone — that's it
+# or, for the React app:
+cd web && npm install && npm run dev
+```
+
+The backend serves the standalone's contract at the root (`/health`, `/models`,
+`/profiles`, `/generate`) and the React app's at `/api/*`. The CLI does **not**
+need any of this; the web layer is entirely optional.
+
 ## Requirements
 
 | Need | Install |
@@ -79,6 +108,7 @@ Use `outline` first if you want to review/edit the plan before expanding.
 | Base (CPU) | `sentence-transformers`, `numpy`, `requests` |
 | PDF / images | `pymupdf`, `pytesseract` + `brew install tesseract tesseract-lang` |
 | Generation | [Ollama](https://ollama.com) running + a pulled model |
+| Web UI (optional) | `pip install -r api/requirements.txt` (`fastapi`, `uvicorn`) |
 
 `index`, `retrieve` and `outline` don't need Ollama; `explain` and `compose` do.
 

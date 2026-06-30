@@ -71,6 +71,16 @@ def _ollama_up() -> bool:
         return False
 
 
+def _is_generation_model(name: str) -> bool:
+    """Exclude embedding-only models (nomic-embed-text, mxbai-embed, bge, ...).
+
+    They show up in `ollama list` but can't generate text, so offering them in
+    the model picker would just produce errors. Name heuristic is enough here:
+    every embedding model Ollama ships carries 'embed' in its tag.
+    """
+    return "embed" not in name.lower()
+
+
 # --- models --------------------------------------------------------------
 class RetrieveBody(BaseModel):
     profile: str
@@ -107,7 +117,8 @@ def models():
     try:
         r = requests.get(OLLAMA_TAGS_URL, timeout=3)
         r.raise_for_status()
-        names = [m["name"] for m in r.json().get("models", [])]
+        names = [m["name"] for m in r.json().get("models", [])
+                 if _is_generation_model(m["name"])]
         if names:
             return names
     except (requests.exceptions.RequestException, KeyError, ValueError):
